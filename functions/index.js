@@ -1,15 +1,22 @@
-const { onRequest } = require("firebase-functions/v2/https");
-const { defineSecret } = require("firebase-functions/v2/params");
+const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 
 admin.initializeApp();
 
-const passHash = defineSecret("PASS_HASH");
+exports.verifyPassword = functions
+  .region("europe-west1")
+  .runWith({ secrets: ["PASS_HASH"] })
+  .https.onRequest((req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
 
-exports.verifyPassword = onRequest(
-  { cors: true, region: "europe-west1", secrets: [passHash] },
-  (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
       return;
@@ -22,12 +29,11 @@ exports.verifyPassword = onRequest(
     }
 
     const hash = crypto.createHash("sha256").update(password).digest("hex");
-    if (hash !== passHash.value()) {
+    if (hash !== process.env.PASS_HASH) {
       res.status(401).json({ error: "Wrong password" });
       return;
     }
 
-    // Password correct — create a custom token for a fixed UID
     admin
       .auth()
       .createCustomToken("planner-user")
@@ -36,5 +42,4 @@ exports.verifyPassword = onRequest(
         console.error("Token creation failed:", err);
         res.status(500).json({ error: "Token creation failed" });
       });
-  }
-);
+  });
