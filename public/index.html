@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pro Minimal Planner</title>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script>
+        const FIREBASE_CONFIG = {
+            apiKey: "REDACTED_API_KEY",
+            authDomain: "weekplaner-ae1a9.firebaseapp.com",
+            databaseURL: "https://weekplaner-ae1a9-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "weekplaner-ae1a9",
+            storageBucket: "weekplaner-ae1a9.firebasestorage.app",
+            messagingSenderId: "779615862071",
+            appId: "1:779615862071:web:39860880d4326303b3eeb2"
+        };
+    </script>
+    <style>
+        :root {
+            --bg: #fdfdfd;
+            --border: #efefef;
+            --text: #333;
+            --selection: rgba(108, 92, 231, 0.1);
+            --accent: #6c5ce7;
+            --icon-color: rgba(0,0,0,0.4);
+            --cell-h: 45px;
+        }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); user-select: none; margin: 0; padding: 20px; font-size: 15px; }
+        
+        .nav { display: flex; justify-content: center; gap: 20px; align-items: center; margin-bottom: 20px; }
+        .calendar-wrapper { position: relative; max-width: 1100px; margin: 0 auto 40px; display: grid; grid-template-columns: 90px repeat(5, 1fr); background: white; border: 1px solid var(--border); }
+        
+        .week-title { max-width: 1100px; margin: 0 auto 8px; font-size: 16px; font-weight: 700; color: var(--text); }
+        .header { padding: 15px; text-align: center; font-weight: 600; border-bottom: 1px solid var(--border); font-size: 13px; text-transform: uppercase; color: #999; }
+        .time-label { grid-column: 1; height: var(--cell-h); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #bbb; box-sizing: border-box; }
+
+        .grid-cell { height: var(--cell-h); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; box-sizing: border-box; }
+        .grid-cell.fri { border-right: none; }
+        .grid-cell.today { background: rgba(0,0,0,0.03); }
+        .header.today { background: rgba(0,0,0,0.03); font-weight: 700; color: var(--text); }
+        .grid-cell.selecting { background: var(--selection); }
+
+        .event-block {
+            position: absolute;
+            top: 2px; left: 2px; right: 2px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 10;
+            cursor: pointer;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.05);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow 0.2s ease, opacity 0.2s ease;
+            height: calc(var(--slots) * var(--cell-h) - 4px);
+        }
+
+        .event-block.active {
+            z-index: 50;
+            opacity: 0.9;
+            cursor: grabbing;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05), 0 12px 28px rgba(0,0,0,0.15);
+        }
+
+        .task-text {
+            padding: 8px 24px 8px 8px; 
+            line-height: 1.3;
+            overflow: hidden;
+            word-break: break-word;
+            outline: none; 
+            min-height: 16px;
+            pointer-events: none; /* Passes clicks up to the main block initially */
+        }
+        
+        /* THE FIX: Re-enable mouse interaction and text selection while editing */
+        .task-text[contenteditable="true"] {
+            cursor: text;
+            background: rgba(255,255,255,0.4);
+            border-radius: 4px;
+            pointer-events: auto; 
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        /* ICONS & CONTROLS */
+        .control-icon {
+            opacity: 0;
+            transition: opacity 0.2s;
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px; height: 20px;
+            z-index: 15;
+            cursor: pointer;
+        }
+        .event-block:not(.editing):hover .control-icon { opacity: 1; }
+        
+        .control-icon svg { width: 14px; height: 14px; fill: var(--icon-color); }
+        .control-icon:hover svg { fill: #d63031; }
+
+        .delete-btn { top: 6px; right: 4px; }
+        .color-btn { top: 6px; right: 26px; }
+        .color-btn span { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.2); display: block; }
+        .color-btn:hover span { border-color: rgba(0,0,0,0.5); }
+
+        .resize-handle {
+            position: absolute; left: 0; right: 0; height: 6px;
+            cursor: ns-resize;
+            z-index: 20;
+            background: transparent;
+        }
+        .resize-handle.top { top: 0; }
+        .resize-handle.bottom { bottom: 0; }
+        .resize-handle:hover { background: rgba(0,0,0,0.08); }
+
+        #toolbar { position: fixed; display: none; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); z-index: 100; gap: 10px; }
+        .color-dot { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); }
+
+        @page { size: A4 landscape; margin: 10mm; }
+        @media print {
+            :root { --cell-h: 25px; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { padding: 0; }
+            .nav, #toolbar, .control-icon, .resize-handle { display: none !important; }
+            .week-title { page-break-before: always; font-size: 14px; margin: 0 0 4px; }
+            .week-title:first-child { page-break-before: auto; }
+            .calendar-wrapper { page-break-inside: avoid; width: 100%; margin: 0 0 0; }
+            .header { padding: 6px; font-size: 11px; }
+            .time-label { font-size: 9px; }
+            .task-text { padding: 2px 4px; font-size: 10px; line-height: 1.1; }
+            .event-block { box-shadow: none !important; border: 1px solid #ccc !important; font-size: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="auth-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:Inter,-apple-system,sans-serif;">
+    <h2 style="margin-bottom:20px;">Weekplaner</h2>
+    <input id="pw-input" type="password" placeholder="Password" style="padding:10px 16px;border:1px solid #ddd;border-radius:6px;font-size:16px;width:200px;" autofocus>
+    <button id="pw-btn" style="margin-top:10px;padding:10px 24px;background:#6c5ce7;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;">Enter</button>
+    <div id="pw-error" style="color:#d63031;margin-top:10px;display:none;font-size:13px;">Wrong password</div>
+</div>
+
+<div id="app-content" style="display:none;">
+<div class="nav">
+    <button onclick="changeWeek(-1)" style="padding: 8px 16px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">←</button>
+    <strong id="weekDisplay">Week 1 of 6</strong>
+    <button onclick="changeWeek(1)" style="padding: 8px 16px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">→</button>
+    <button onclick="window.print()" id="printBtn" style="margin-left: 20px; background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Print Remaining Weeks</button>
+</div>
+
+<div id="print-container"></div>
+
+<div id="toolbar">
+    <div class="color-dot" style="background: #D1E7FF;" data-color="#D1E7FF"></div>
+    <div class="color-dot" style="background: #D1F2D1;" data-color="#D1F2D1"></div>
+    <div class="color-dot" style="background: #FFE0B2;" data-color="#FFE0B2"></div>
+    <div class="color-dot" style="background: #F8D7DA;" data-color="#F8D7DA"></div>
+    <div class="color-dot" style="background: #E0C3FC;" data-color="#E0C3FC"></div>
+</div>
+
+<svg style="display:none;">
+    <defs>
+        <g id="icon-close">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </g>
+    </defs>
+</svg>
+</div><!-- end app-content -->
+
+<script>
+    // Cloud Function URL — update this after deploying
+    const VERIFY_URL = 'https://europe-west1-weekplaner-ae1a9.cloudfunctions.net/verifyPassword';
+
+    // Initialize Firebase early so we can use auth
+    firebase.initializeApp(FIREBASE_CONFIG);
+
+    async function unlockApp(password) {
+        const errEl = document.getElementById('pw-error');
+        const btnEl = document.getElementById('pw-btn');
+        try {
+            btnEl.disabled = true;
+            btnEl.textContent = '...';
+            const resp = await fetch(VERIFY_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            });
+            if (!resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                throw new Error(data.error || 'Authentication failed');
+            }
+            const { token } = await resp.json();
+            await firebase.auth().signInWithCustomToken(token);
+        } catch (err) {
+            errEl.textContent = err.message === 'Wrong password' ? 'Wrong password' : 'Auth failed — try again';
+            errEl.style.display = 'block';
+            btnEl.disabled = false;
+            btnEl.textContent = 'Enter';
+            return;
+        }
+        document.getElementById('auth-overlay').style.display = 'none';
+        document.getElementById('app-content').style.display = 'block';
+        sessionStorage.setItem('planner_auth', '1');
+        initApp();
+    }
+
+    // Re-auth silently if session is still valid
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user && sessionStorage.getItem('planner_auth')) {
+            document.getElementById('auth-overlay').style.display = 'none';
+            document.getElementById('app-content').style.display = 'block';
+            initApp();
+        }
+    });
+
+    document.getElementById('pw-btn').onclick = () => {
+        unlockApp(document.getElementById('pw-input').value);
+    };
+    document.getElementById('pw-input').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('pw-btn').click(); };
+
+    function initApp() {
+    const eventsRef = firebase.database().ref('events');
+
+    const planStart = new Date(2026, 2, 16);
+    const daysSinceStart = Math.floor((new Date() - planStart) / 86400000);
+    let currentWeek = Math.max(1, Math.min(6, Math.floor(daysSinceStart / 7) + 1));
+    let events = JSON.parse(localStorage.getItem('plannerEvents_v9') || '[]');
+
+    events.forEach(ev => { if (!ev.id) ev.id = Date.now() + Math.random(); });
+
+    // Migrate existing localStorage data to Firebase on first run
+    if (events.length > 0) {
+        eventsRef.once('value').then(snap => {
+            if (!snap.exists()) eventsRef.set(events);
+        });
+    }
+
+    // Real-time sync — updates from all users
+    let skipNextSync = false;
+    eventsRef.on('value', snap => {
+        if (skipNextSync) { skipNextSync = false; return; }
+        if (snap.exists()) {
+            const val = snap.val();
+            events = Array.isArray(val) ? val : Object.values(val);
+            localStorage.setItem('plannerEvents_v9', JSON.stringify(events));
+            renderUI();
+        }
+    });
+    
+    let isSelecting = false, isMoving = false, isResizingBottom = false, isResizingTop = false;
+    let hasDragged = false; 
+    
+    let startCell = null, selectionRange = [];
+    let activeEvent = null, activeElement = null;
+    let colorChangeTarget = null;
+    let startY = 0, startX = 0, startHeight = 0, dragOffsetY = 0;
+
+    function renderUI() {
+        const container = document.getElementById('print-container');
+        container.innerHTML = '';
+        createGrid(currentWeek, container);
+        document.getElementById('weekDisplay').innerText = `Week ${currentWeek} of 6`;
+    }
+
+    function createGrid(weekNum, target) {
+        const title = document.createElement('div');
+        title.className = 'week-title';
+        title.innerText = `Week ${weekNum}`;
+        target.appendChild(title);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'calendar-wrapper';
+        const startDate = new Date(2026, 2, 16); // 16 March 2026
+        const weekOffset = (weekNum - 1) * 7;
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+        let todayCol = -1;
+        const headers = days.map((d, i) => {
+            const date = new Date(startDate);
+            date.setDate(startDate.getDate() + weekOffset + i);
+            const dateStr = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+            const isToday = dateStr === todayStr;
+            if (isToday) todayCol = i;
+            return `<div class="header${isToday ? ' today' : ''}">${d} ${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}</div>`;
+        }).join('');
+        wrapper.innerHTML = `<div class="header"></div>${headers}`;
+
+        for (let h = 8; h < 18; h++) {
+            for (let m of [0, 30]) {
+                const t = h * 60 + m;
+                const label = document.createElement('div');
+                label.className = 'time-label';
+                label.innerText = m === 0 ? `${h}:00` : '';
+                wrapper.appendChild(label);
+
+                for (let d = 0; d < 5; d++) {
+                    const cell = document.createElement('div');
+                    cell.className = `grid-cell ${d === 4 ? 'fri' : ''}${d === todayCol ? ' today' : ''}`;
+                    cell.dataset.day = d;
+                    cell.dataset.time = t;
+                    
+                    cell.onmousedown = (e) => {
+                        if (e.target !== cell) return;
+                        isSelecting = true; startCell = cell; selectionRange = [cell];
+                    };
+                    cell.onmouseenter = () => { if (isSelecting) updateDrag(cell); };
+                    wrapper.appendChild(cell);
+                }
+            }
+        }
+        
+        events.filter(ev => ev.week === weekNum).forEach(ev => {
+            const startNode = wrapper.querySelector(`.grid-cell[data-day="${ev.day}"][data-time="${ev.start}"]`);
+            if (startNode) {
+                const div = document.createElement('div');
+                div.className = 'event-block';
+                div.dataset.id = ev.id;
+                div.style.backgroundColor = ev.color;
+                div.style.setProperty('--slots', ev.duration / 30);
+                
+                div.innerHTML = `
+                    <div class="resize-handle top"></div>
+                    <div class="task-text">${ev.text}</div>
+                    <div class="control-icon color-btn" title="Change Color"><span style="background:${ev.color};"></span></div>
+                    <div class="control-icon delete-btn" title="Delete Task"><svg viewBox="0 0 24 24"><use href="#icon-close"></use></svg></div>
+                    <div class="resize-handle bottom"></div>
+                `;
+                
+                const textNode = div.querySelector('.task-text');
+
+                // THE FIX: Ignore clicks on the block if the text is currently being edited
+                div.onclick = (e) => {
+                    if (hasDragged) return; 
+                    if (textNode.contentEditable === "true") return; 
+                    e.stopPropagation();
+                    startInlineEdit(textNode, div, ev);
+                };
+
+                div.onmousedown = (e) => {
+                    if (textNode.contentEditable === "true") { e.stopPropagation(); return; }
+                    e.stopPropagation();
+                    isMoving = true; hasDragged = false;
+                    activeEvent = ev; activeElement = div;
+                    startX = e.clientX; startY = e.clientY;
+                    dragOffsetY = e.clientY - div.getBoundingClientRect().top;
+                    div.classList.add('active');
+                };
+
+                div.querySelector('.color-btn').onmousedown = (e) => {
+                    e.stopPropagation();
+                    colorChangeTarget = ev;
+                    const tb = document.getElementById('toolbar');
+                    tb.style.display = 'flex';
+                    tb.style.top = `${e.pageY + 10}px`;
+                    tb.style.left = `${e.pageX + 10}px`;
+                };
+
+                div.querySelector('.delete-btn').onmousedown = (e) => {
+                    e.stopPropagation();
+                    events = events.filter(ex => ex !== ev);
+                    save();
+                };
+
+                div.querySelector('.bottom').onmousedown = (e) => {
+                    if (textNode.contentEditable === "true") { e.stopPropagation(); return; }
+                    e.stopPropagation();
+                    isResizingBottom = true; hasDragged = false;
+                    activeEvent = ev; activeElement = div;
+                    startY = e.clientY; startHeight = div.offsetHeight;
+                    div.classList.add('active');
+                };
+
+                div.querySelector('.top').onmousedown = (e) => {
+                    if (textNode.contentEditable === "true") { e.stopPropagation(); return; }
+                    e.stopPropagation();
+                    isResizingTop = true; hasDragged = false;
+                    activeEvent = ev; activeElement = div;
+                    startY = e.clientY; startHeight = div.offsetHeight;
+                    div.classList.add('active');
+                };
+
+                startNode.appendChild(div);
+            }
+        });
+        target.appendChild(wrapper);
+    }
+
+    function startInlineEdit(textNode, blockElement, eventObj) {
+        blockElement.classList.add('editing');
+        textNode.contentEditable = true;
+        textNode.focus();
+
+        const selection = window.getSelection();
+        selection.selectAllChildren(textNode);
+        selection.collapseToEnd();
+
+        textNode.onblur = () => {
+            textNode.contentEditable = false;
+            blockElement.classList.remove('editing');
+            eventObj.text = textNode.innerText.trim();
+            save(); 
+        };
+
+        textNode.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                textNode.blur(); 
+            }
+        };
+    }
+
+    function updateDrag(cell) {
+        if (cell.dataset.day !== startCell.dataset.day) return;
+        document.querySelectorAll('.grid-cell').forEach(c => c.classList.remove('selecting'));
+        const t1 = parseInt(startCell.dataset.time), t2 = parseInt(cell.dataset.time);
+        selectionRange = Array.from(document.querySelectorAll(`.grid-cell[data-day="${startCell.dataset.day}"]`))
+            .filter(c => { const t = parseInt(c.dataset.time); return t >= Math.min(t1, t2) && t <= Math.max(t1, t2); });
+        selectionRange.forEach(c => c.classList.add('selecting'));
+    }
+
+    window.onmousemove = (e) => {
+        if (!isResizingBottom && !isResizingTop && !isMoving) return;
+        
+        if (Math.abs(e.clientY - startY) > 3 || Math.abs(e.clientX - startX) > 3) {
+            hasDragged = true;
+        }
+
+        if (isResizingBottom && activeElement) {
+            const deltaY = e.clientY - startY;
+            activeElement.style.height = `${Math.max(20, startHeight + deltaY)}px`;
+        } 
+        else if (isResizingTop && activeElement) {
+            const deltaY = e.clientY - startY;
+            const clampedDeltaY = Math.min(deltaY, startHeight - 20);
+            activeElement.style.height = `${startHeight - clampedDeltaY}px`;
+            activeElement.style.transform = `translateY(${clampedDeltaY}px)`;
+        }
+        else if (isMoving && activeElement) {
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            activeElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        }
+    };
+
+    window.onmouseup = (e) => {
+        if (isSelecting) {
+            isSelecting = false;
+            colorChangeTarget = null;
+            const tb = document.getElementById('toolbar');
+            tb.style.display = 'flex'; tb.style.top = `${e.pageY + 10}px`; tb.style.left = `${e.pageX + 10}px`;
+        }
+        
+        if (isResizingBottom && activeElement) {
+            let rawDuration = ((activeElement.offsetHeight + 6) / 45) * 30;
+            activeEvent.duration = Math.max(30, Math.round(rawDuration / 30) * 30);
+            save();
+        }
+
+        if (isResizingTop && activeElement) {
+            const clampedDeltaY = Math.min(e.clientY - startY, startHeight - 20);
+            const timeShift = Math.round(clampedDeltaY / 45) * 30;
+            if (activeEvent.duration - timeShift >= 30) {
+                activeEvent.start += timeShift;
+                activeEvent.duration -= timeShift;
+            }
+            save();
+        }
+        
+        if (isMoving && activeElement && hasDragged) {
+            activeElement.style.display = 'none';
+            const dropY = e.clientY - dragOffsetY + 5;
+            const overCell = document.elementFromPoint(e.clientX, dropY);
+            activeElement.style.display = 'flex';
+
+            if (overCell && overCell.classList.contains('grid-cell')) {
+                activeEvent.day = parseInt(overCell.dataset.day);
+                activeEvent.start = parseInt(overCell.dataset.time);
+            }
+            save();
+        }
+
+        isResizingBottom = false; isResizingTop = false; isMoving = false;
+        if (activeElement) {
+            activeElement.classList.remove('active');
+            activeElement.style.transform = 'none';
+            activeElement = null;
+        }
+    };
+
+    document.querySelectorAll('.color-dot').forEach(dot => {
+        dot.onclick = () => {
+            document.getElementById('toolbar').style.display = 'none';
+
+            // Change color of existing event
+            if (colorChangeTarget) {
+                colorChangeTarget.color = dot.dataset.color;
+                colorChangeTarget = null;
+                save();
+                return;
+            }
+
+            // Create new event
+            const times = selectionRange.map(c => parseInt(c.dataset.time));
+            const newId = Date.now();
+            const newEvent = {
+                id: newId,
+                week: currentWeek,
+                day: parseInt(startCell.dataset.day),
+                start: Math.min(...times),
+                duration: selectionRange.length * 30,
+                color: dot.dataset.color,
+                text: ''
+            };
+
+            events.push(newEvent);
+            save();
+
+            setTimeout(() => {
+                const newBlock = document.querySelector(`.event-block[data-id="${newId}"]`);
+                if (newBlock) {
+                    const textNode = newBlock.querySelector('.task-text');
+                    startInlineEdit(textNode, newBlock, newEvent);
+                }
+            }, 10);
+        };
+    });
+
+    function save() {
+        localStorage.setItem('plannerEvents_v9', JSON.stringify(events));
+        skipNextSync = true;
+        eventsRef.set(events);
+        renderUI();
+    }
+    window.changeWeek = function(n) { currentWeek = Math.max(1, Math.min(6, currentWeek + n)); renderUI(); };
+
+    window.onbeforeprint = () => {
+        const container = document.getElementById('print-container');
+        container.innerHTML = '';
+        for(let w=currentWeek; w<=6; w++) createGrid(w, container);
+    };
+    window.onafterprint = () => renderUI();
+
+    renderUI();
+    } // end initApp
+</script>
+</body>
+</html>
