@@ -8,7 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script>
         const FIREBASE_CONFIG = {
-            apiKey: "REDACTED_API_KEY",
+            apiKey: "AIzaSyCn2O0rvQyBaJRVef2ELSFB0DcaEx0pJYY",
             authDomain: "weekplaner-ae1a9.firebaseapp.com",
             databaseURL: "https://weekplaner-ae1a9-default-rtdb.europe-west1.firebasedatabase.app",
             projectId: "weekplaner-ae1a9",
@@ -279,12 +279,12 @@
         const weekOffset = (weekNum - 1) * 7;
         const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
         const today = new Date();
-        const todayStr = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+        const todayStr = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
         let todayCol = -1;
         const headers = days.map((d, i) => {
             const date = new Date(startDate);
             date.setDate(startDate.getDate() + weekOffset + i);
-            const dateStr = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+            const dateStr = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`;
             const isToday = dateStr === todayStr;
             if (isToday) todayCol = i;
             return `<div class="header${isToday ? ' today' : ''}">${d} ${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}</div>`;
