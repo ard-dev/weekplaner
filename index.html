@@ -5,6 +5,7 @@
     <title>Pro Minimal Planner</title>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
     <style>
         :root {
             --bg: #fdfdfd;
@@ -187,15 +188,7 @@
 
     function initApp() {
     // Firebase setup
-    firebase.initializeApp({
-        apiKey: "AIzaSyCn2O0rvQyBaJRVef2ELSFB0DcaEx0pJYY",
-        authDomain: "weekplaner-ae1a9.firebaseapp.com",
-        databaseURL: "https://weekplaner-ae1a9-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "weekplaner-ae1a9",
-        storageBucket: "weekplaner-ae1a9.firebasestorage.app",
-        messagingSenderId: "779615862071",
-        appId: "1:779615862071:web:39860880d4326303b3eeb2"
-    });
+    firebase.initializeApp(FIREBASE_CONFIG);
     const eventsRef = firebase.database().ref('events');
 
     const planStart = new Date(2026, 2, 16);
