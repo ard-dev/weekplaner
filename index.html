@@ -196,7 +196,9 @@
     });
     const eventsRef = firebase.database().ref('events');
 
-    let currentWeek = 1;
+    const planStart = new Date(2026, 2, 16);
+    const daysSinceStart = Math.floor((new Date() - planStart) / 86400000);
+    let currentWeek = Math.max(1, Math.min(6, Math.floor(daysSinceStart / 7) + 1));
     let events = JSON.parse(localStorage.getItem('plannerEvents_v9') || '[]');
 
     events.forEach(ev => { if (!ev.id) ev.id = Date.now() + Math.random(); });
