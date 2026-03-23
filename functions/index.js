@@ -1,14 +1,14 @@
 const { onRequest } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/v2/params");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 
 admin.initializeApp();
 
-const PASS_HASH =
-  "REDACTED_HASH";
+const passHash = defineSecret("PASS_HASH");
 
 exports.verifyPassword = onRequest(
-  { cors: true, region: "europe-west1" },
+  { cors: true, region: "europe-west1", secrets: [passHash] },
   (req, res) => {
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
@@ -22,7 +22,7 @@ exports.verifyPassword = onRequest(
     }
 
     const hash = crypto.createHash("sha256").update(password).digest("hex");
-    if (hash !== PASS_HASH) {
+    if (hash !== passHash.value()) {
       res.status(401).json({ error: "Wrong password" });
       return;
     }
