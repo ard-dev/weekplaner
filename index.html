@@ -121,6 +121,14 @@
 </head>
 <body>
 
+<div id="auth-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:Inter,-apple-system,sans-serif;">
+    <h2 style="margin-bottom:20px;">Weekplaner</h2>
+    <input id="pw-input" type="password" placeholder="Password" style="padding:10px 16px;border:1px solid #ddd;border-radius:6px;font-size:16px;width:200px;" autofocus>
+    <button id="pw-btn" style="margin-top:10px;padding:10px 24px;background:#6c5ce7;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;">Enter</button>
+    <div id="pw-error" style="color:#d63031;margin-top:10px;display:none;font-size:13px;">Wrong password</div>
+</div>
+
+<div id="app-content" style="display:none;">
 <div class="nav">
     <button onclick="changeWeek(-1)" style="padding: 8px 16px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">←</button>
     <strong id="weekDisplay">Week 1 of 6</strong>
@@ -145,8 +153,34 @@
         </g>
     </defs>
 </svg>
+</div><!-- end app-content -->
 
 <script>
+    // Password protection
+    const PASS_HASH = 'REDACTED_HASH';
+    async function checkPassword(pw) {
+        const encoded = new TextEncoder().encode(pw);
+        const buffer = await crypto.subtle.digest('SHA-256', encoded);
+        return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    function unlockApp() {
+        document.getElementById('auth-overlay').style.display = 'none';
+        document.getElementById('app-content').style.display = 'block';
+        sessionStorage.setItem('planner_auth', '1');
+        initApp();
+    }
+    if (sessionStorage.getItem('planner_auth')) {
+        unlockApp();
+    } else {
+        document.getElementById('pw-btn').onclick = async () => {
+            const hash = await checkPassword(document.getElementById('pw-input').value);
+            if (hash === PASS_HASH) { unlockApp(); }
+            else { document.getElementById('pw-error').style.display = 'block'; }
+        };
+        document.getElementById('pw-input').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('pw-btn').click(); };
+    }
+
+    function initApp() {
     // Firebase setup
     firebase.initializeApp({
         apiKey: "REDACTED_API_KEY",
@@ -440,7 +474,7 @@
         eventsRef.set(events);
         renderUI();
     }
-    function changeWeek(n) { currentWeek = Math.max(1, Math.min(6, currentWeek + n)); renderUI(); }
+    window.changeWeek = function(n) { currentWeek = Math.max(1, Math.min(6, currentWeek + n)); renderUI(); };
 
     window.onbeforeprint = () => {
         const container = document.getElementById('print-container');
@@ -450,6 +484,7 @@
     window.onafterprint = () => renderUI();
 
     renderUI();
+    } // end initApp
 </script>
 </body>
 </html>
