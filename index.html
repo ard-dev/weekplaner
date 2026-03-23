@@ -5,6 +5,7 @@
     <title>Pro Minimal Planner</title>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script>
         const FIREBASE_CONFIG = {
             apiKey: "REDACTED_API_KEY",
@@ -179,7 +180,17 @@
         const buffer = await crypto.subtle.digest('SHA-256', encoded);
         return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
-    function unlockApp() {
+    // Initialize Firebase early so we can use auth
+    firebase.initializeApp(FIREBASE_CONFIG);
+
+    async function unlockApp() {
+        try {
+            await firebase.auth().signInAnonymously();
+        } catch (err) {
+            document.getElementById('pw-error').textContent = 'Auth failed — check Firebase settings';
+            document.getElementById('pw-error').style.display = 'block';
+            return;
+        }
         document.getElementById('auth-overlay').style.display = 'none';
         document.getElementById('app-content').style.display = 'block';
         sessionStorage.setItem('planner_auth', '1');
@@ -190,15 +201,13 @@
     } else {
         document.getElementById('pw-btn').onclick = async () => {
             const hash = await checkPassword(document.getElementById('pw-input').value);
-            if (hash === PASS_HASH) { unlockApp(); }
+            if (hash === PASS_HASH) { await unlockApp(); }
             else { document.getElementById('pw-error').style.display = 'block'; }
         };
         document.getElementById('pw-input').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('pw-btn').click(); };
     }
 
     function initApp() {
-    // Firebase setup
-    firebase.initializeApp(FIREBASE_CONFIG);
     const eventsRef = firebase.database().ref('events');
 
     const planStart = new Date(2026, 2, 16);
