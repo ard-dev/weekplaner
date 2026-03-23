@@ -1,22 +1,12 @@
-const functions = require("firebase-functions");
+const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 
 admin.initializeApp();
 
-exports.verifyPassword = functions
-  .region("europe-west1")
-  .runWith({ secrets: ["PASS_HASH"] })
-  .https.onRequest((req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
-
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-
+exports.verifyPassword = onRequest(
+  { cors: true, region: "europe-west1", secrets: ["PASS_HASH"] },
+  (req, res) => {
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
       return;
@@ -42,4 +32,5 @@ exports.verifyPassword = functions
         console.error("Token creation failed:", err);
         res.status(500).json({ error: "Token creation failed" });
       });
-  });
+  }
+);
