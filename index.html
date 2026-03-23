@@ -22,10 +22,12 @@
         
         .week-title { max-width: 1100px; margin: 0 auto 8px; font-size: 16px; font-weight: 700; color: var(--text); }
         .header { padding: 15px; text-align: center; font-weight: 600; border-bottom: 1px solid var(--border); font-size: 13px; text-transform: uppercase; color: #999; }
-        .time-label { grid-column: 1; height: var(--cell-h); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #bbb; }
+        .time-label { grid-column: 1; height: var(--cell-h); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #bbb; box-sizing: border-box; }
 
         .grid-cell { height: var(--cell-h); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; box-sizing: border-box; }
         .grid-cell.fri { border-right: none; }
+        .grid-cell.today { background: rgba(0,0,0,0.03); }
+        .header.today { background: rgba(0,0,0,0.03); font-weight: 700; color: var(--text); }
         .grid-cell.selecting { background: var(--selection); }
 
         .event-block {
@@ -136,7 +138,7 @@
     <button onclick="changeWeek(-1)" style="padding: 8px 16px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">←</button>
     <strong id="weekDisplay">Week 1 of 6</strong>
     <button onclick="changeWeek(1)" style="padding: 8px 16px; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer;">→</button>
-    <button onclick="window.print()" style="margin-left: 20px; background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Print 6 Weeks</button>
+    <button onclick="window.print()" id="printBtn" style="margin-left: 20px; background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Print Remaining Weeks</button>
 </div>
 
 <div id="print-container"></div>
@@ -247,10 +249,16 @@
         const startDate = new Date(2026, 2, 16); // 16 March 2026
         const weekOffset = (weekNum - 1) * 7;
         const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+        let todayCol = -1;
         const headers = days.map((d, i) => {
             const date = new Date(startDate);
             date.setDate(startDate.getDate() + weekOffset + i);
-            return `<div class="header">${d} ${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}</div>`;
+            const dateStr = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+            const isToday = dateStr === todayStr;
+            if (isToday) todayCol = i;
+            return `<div class="header${isToday ? ' today' : ''}">${d} ${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}</div>`;
         }).join('');
         wrapper.innerHTML = `<div class="header"></div>${headers}`;
 
@@ -264,7 +272,7 @@
 
                 for (let d = 0; d < 5; d++) {
                     const cell = document.createElement('div');
-                    cell.className = `grid-cell ${d === 4 ? 'fri' : ''}`;
+                    cell.className = `grid-cell ${d === 4 ? 'fri' : ''}${d === todayCol ? ' today' : ''}`;
                     cell.dataset.day = d;
                     cell.dataset.time = t;
                     
@@ -505,7 +513,7 @@
     window.onbeforeprint = () => {
         const container = document.getElementById('print-container');
         container.innerHTML = '';
-        for(let w=1; w<=6; w++) createGrid(w, container);
+        for(let w=currentWeek; w<=6; w++) createGrid(w, container);
     };
     window.onafterprint = () => renderUI();
 
