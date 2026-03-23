@@ -41,7 +41,7 @@
             display: flex;
             flex-direction: column;
             transition: box-shadow 0.2s ease, opacity 0.2s ease;
-            height: calc(var(--slots) * var(--cell-h) - 6px);
+            height: calc(var(--slots) * var(--cell-h) - 4px);
         }
 
         .event-block.active {
@@ -89,6 +89,9 @@
         .control-icon:hover svg { fill: #d63031; }
 
         .delete-btn { top: 6px; right: 4px; }
+        .color-btn { top: 6px; right: 26px; }
+        .color-btn span { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.2); display: block; }
+        .color-btn:hover span { border-color: rgba(0,0,0,0.5); }
 
         .resize-handle {
             position: absolute; left: 0; right: 0; height: 6px;
@@ -221,6 +224,7 @@
     
     let startCell = null, selectionRange = [];
     let activeEvent = null, activeElement = null;
+    let colorChangeTarget = null;
     let startY = 0, startX = 0, startHeight = 0, dragOffsetY = 0;
 
     function renderUI() {
@@ -284,6 +288,7 @@
                 div.innerHTML = `
                     <div class="resize-handle top"></div>
                     <div class="task-text">${ev.text}</div>
+                    <div class="control-icon color-btn" title="Change Color"><span style="background:${ev.color};"></span></div>
                     <div class="control-icon delete-btn" title="Delete Task"><svg viewBox="0 0 24 24"><use href="#icon-close"></use></svg></div>
                     <div class="resize-handle bottom"></div>
                 `;
@@ -306,6 +311,15 @@
                     startX = e.clientX; startY = e.clientY;
                     dragOffsetY = e.clientY - div.getBoundingClientRect().top;
                     div.classList.add('active');
+                };
+
+                div.querySelector('.color-btn').onmousedown = (e) => {
+                    e.stopPropagation();
+                    colorChangeTarget = ev;
+                    const tb = document.getElementById('toolbar');
+                    tb.style.display = 'flex';
+                    tb.style.top = `${e.pageY + 10}px`;
+                    tb.style.left = `${e.pageX + 10}px`;
                 };
 
                 div.querySelector('.delete-btn').onmousedown = (e) => {
@@ -398,6 +412,7 @@
     window.onmouseup = (e) => {
         if (isSelecting) {
             isSelecting = false;
+            colorChangeTarget = null;
             const tb = document.getElementById('toolbar');
             tb.style.display = 'flex'; tb.style.top = `${e.pageY + 10}px`; tb.style.left = `${e.pageX + 10}px`;
         }
@@ -441,6 +456,17 @@
 
     document.querySelectorAll('.color-dot').forEach(dot => {
         dot.onclick = () => {
+            document.getElementById('toolbar').style.display = 'none';
+
+            // Change color of existing event
+            if (colorChangeTarget) {
+                colorChangeTarget.color = dot.dataset.color;
+                colorChangeTarget = null;
+                save();
+                return;
+            }
+
+            // Create new event
             const times = selectionRange.map(c => parseInt(c.dataset.time));
             const newId = Date.now();
             const newEvent = {
@@ -450,13 +476,11 @@
                 start: Math.min(...times),
                 duration: selectionRange.length * 30,
                 color: dot.dataset.color,
-                text: '' 
+                text: ''
             };
-            
-            events.push(newEvent);
 
+            events.push(newEvent);
             save();
-            document.getElementById('toolbar').style.display = 'none';
 
             setTimeout(() => {
                 const newBlock = document.querySelector(`.event-block[data-id="${newId}"]`);
