@@ -2,7 +2,7 @@
   "name": "weekplaner-functions",
   "description": "Cloud Functions for Weekplaner authentication",
   "engines": {
-    "node": "18"
+    "node": "20"
   },
   "main": "index.js",
   "dependencies": {
