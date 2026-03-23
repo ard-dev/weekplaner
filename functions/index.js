@@ -5,7 +5,7 @@ const crypto = require("crypto");
 admin.initializeApp();
 
 exports.verifyPassword = onRequest(
-  { region: "europe-west1", secrets: ["PASS_HASH"] },
+  { region: "europe-west1", secrets: ["PASS_HASH"], invoker: "public" },
   (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
