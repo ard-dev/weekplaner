@@ -229,7 +229,8 @@
     eventsRef.on('value', snap => {
         if (skipNextSync) { skipNextSync = false; return; }
         if (snap.exists()) {
-            events = snap.val();
+            const val = snap.val();
+            events = Array.isArray(val) ? val : Object.values(val);
             localStorage.setItem('plannerEvents_v9', JSON.stringify(events));
             renderUI();
         }
