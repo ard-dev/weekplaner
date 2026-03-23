@@ -5,8 +5,17 @@ const crypto = require("crypto");
 admin.initializeApp();
 
 exports.verifyPassword = onRequest(
-  { cors: true, region: "europe-west1", secrets: ["PASS_HASH"] },
+  { region: "europe-west1", secrets: ["PASS_HASH"] },
   (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
       return;
